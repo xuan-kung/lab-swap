@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信息科组 · 电脑室调课系统</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#fff; --ink:#1f2329; --muted:#6b7280; --line:#e5e7eb;
+    --brand:#2563eb; --brand-soft:#eff4ff;
+    --lab1:#e8f0fe; --lab1-bd:#93b4f5; --lab1-ink:#1e40af;
+    --lab2:#e7f7ee; --lab2-bd:#7fd6a3; --lab2-ink:#166534;
+    --empty:#f3f4f6; --ok:#16a34a; --warn:#dc2626;
+    --shadow:0 1px 3px rgba(0,0,0,.06),0 6px 18px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;}
+  .wrap{max-width:1120px;margin:0 auto;padding:18px 16px 48px;}
+  header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:6px;}
+  h1{font-size:20px;margin:0;}
+  .sub{color:var(--muted);font-size:13px;margin:2px 0 14px;}
+
+  .weekbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow);margin-bottom:14px;}
+  .weekbar .nav{display:flex;align-items:center;gap:8px;}
+  .weekbar button.navbtn{border:1px solid var(--line);background:#fff;border-radius:8px;width:34px;height:34px;font-size:18px;cursor:pointer;}
+  .weekbar .wk{font-weight:700;font-size:16px;min-width:140px;text-align:center;}
+  .weekbar .grow{flex:1}
+  .weekbar select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;}
+
+  .id-bar{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);margin-bottom:14px;}
+  .id-bar label{font-size:13px;color:var(--muted);white-space:nowrap;}
+  .id-bar input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;flex:1;min-width:160px;outline:none}
+  .id-bar input:focus{border-color:var(--brand)}
+  .id-bar .mini{margin-left:auto}
+  .id-bar button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;color:var(--muted)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media(max-width:780px){.grid2{grid-template-columns:1fr}}
+  .lab-card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;}
+  .lab-head{padding:12px 16px;font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .lab1 .lab-head{background:var(--lab1);color:var(--lab1-ink);border-bottom:2px solid var(--lab1-bd)}
+  .lab2 .lab-head{background:var(--lab2);color:var(--lab2-ink);border-bottom:2px solid var(--lab2-bd)}
+  .tbl-scroll{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:440px;}
+  th,td{border:1px solid var(--line);padding:6px 4px;text-align:center;vertical-align:middle;}
+  thead th{background:#fafbfc;color:var(--muted);font-weight:600;}
+  .rowhead{background:#fafbfc;color:var(--muted);font-weight:600;white-space:nowrap;width:56px;}
+  .cell{height:46px;cursor:pointer;transition:.1s;border-radius:6px;}
+  .cell:hover{outline:2px solid var(--brand);outline-offset:-2px;}
+  .cell .cls{font-weight:600;display:block;}
+  .cell .tea{font-size:11px;color:var(--muted);display:block;}
+  .lab1 .cell.filled{background:var(--lab1);border:1px solid var(--lab1-bd);color:var(--lab1-ink);}
+  .lab2 .cell.filled{background:var(--lab2);border:1px solid var(--lab2-bd);color:var(--lab2-ink);}
+  .cell.empty{background:var(--empty);color:#b6bcc4;}
+  .cell.selA{outline:3px solid var(--brand);outline-offset:-3px;box-shadow:0 0 0 3px var(--brand-soft);}
+  .cell.selB{outline:3px solid var(--ok);outline-offset:-3px;box-shadow:0 0 0 3px #e7f7ee;}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px;margin-top:16px;}
+  .panel h3{margin:0 0 10px;font-size:15px;}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;}
+  button.act{border:1px solid var(--brand);background:var(--brand-soft);color:var(--brand);border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;}
+  button.act.ghost{background:#fff;color:var(--muted);border-color:var(--line);}
+  button.act.sm{padding:6px 11px;font-size:13px;border-radius:8px;}
+  button.act:disabled{opacity:.45;cursor:not-allowed;}
+  .hint{font-size:13px;color:var(--muted);margin-top:10px;min-height:20px;}
+  .hint b{color:var(--ink);}
+  .hint.cross{background:#fff7e6;border:1px solid #ffd591;color:#ad6800;padding:8px 12px;border-radius:10px;margin-top:6px;}
+  .range{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);}
+  .range label{font-size:13px;color:var(--muted);}
+  .range select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;}
+  #weekChecks{display:none;flex-wrap:wrap;gap:6px;margin-top:8px;width:100%;}
+  #weekChecks label{font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer;background:#fff}
+  .rule{font-size:12.5px;color:var(--muted);margin-top:8px;}
+
+  .editbox{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fafbfc;display:none;}
+  .editbox.show{display:block;}
+  .editbox .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .editbox input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;flex:1;min-width:140px;}
+
+  .log{margin-top:16px;}
+  .log table{min-width:auto;}
+  .log th{background:#fafbfc;}
+  .tag{font-size:11px;padding:2px 8px;border-radius:999px;}
+  .tag.ok{background:#e7f7ee;color:#166534;}
+  .tag.move{background:#eff4ff;color:#1e40af;}
+  .tag.edit{background:#fff3e0;color:#b45309;}
+  .tag.import{background:#f3e8ff;color:#7c3aed;}
+
+  /* modal */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto;z-index:50}
+  .mask.show{display:flex;}
+  .modal{background:#fff;border-radius:14px;max-width:680px;width:100%;padding:18px 20px;box-shadow:var(--shadow);}
+  .modal h3{margin:0 0 8px;}
+  .modal p{font-size:13px;color:var(--muted);}
+  .modal textarea{width:100%;height:150px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;}
+  .modal .labtitle{font-weight:700;margin:10px 0 4px;font-size:14px;}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.25s;z-index:60;pointer-events:none}
+  .toast.show{opacity:1}
+  .imp-row{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .imp-row label{font-size:13px;color:var(--muted);min-width:92px}
+  .imp-row input[type=file]{flex:1;font-size:13px}
+  .modal hr{border:none;border-top:1px dashed var(--line);margin:14px 0}
+  footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px;}
+  .term-badge{display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:14px;font-weight:600;padding:6px 14px;border-radius:999px;letter-spacing:.5px;box-shadow:0 2px 6px rgba(37,99,235,.25);}
+  .term-badge.empty{background:#94a3b8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>信息科组 · 电脑室调课系统</h1>
+    <span class="term-badge" id="termBadge"></span>
+    <button class="act ghost" id="openImport">⬇️ 导入基础课表</button>
+  </header>
+  <div class="sub" id="subline">不同设备、不同老师浏览器打开同一链接 → 同一份实时课表；含 20 周，改动可应用到单周或多周。</div>
+
+  <div class="weekbar">
+    <div class="nav">
+      <button class="navbtn" id="prev">‹</button>
+      <span class="wk" id="wkLabel">第 1 周 / 共 20 周</span>
+      <button class="navbtn" id="next">›</button>
+      <button class="act ghost sm" id="thisWeek" title="跳回当前实际周次">📅 回到本周</button>
+      <span id="wkRange" class="meta" style="color:var(--muted);font-size:13px"></span>
+    </div>
+    <span class="grow"></span>
+    <span class="meta" style="color:var(--muted);font-size:13px">跳周：</span>
+    <select id="wkJump"></select>
+  </div>
+
+  <div class="id-bar">
+    <label>操作人姓名</label>
+    <input id="who" placeholder="调课前请先输入你的姓名，便于追溯">
+    <button id="saveName" title="记住房号本机">记住</button>
+  </div>
+
+  <div class="grid2" id="grids"></div>
+
+  <div class="panel">
+    <h3>调课操作</h3>
+    <div class="actions" id="opActions">
+      <span class="hint" id="opHint">点选要操作的格子：先点 A，再点 B（B 有课＝互换，B 空＝调位）；或点 A 后“编辑本格”改教师。</span>
+    </div>
+    <div class="editbox" id="editbox">
+      <div class="row">
+        <input id="edCls" placeholder="班级（默认保持不变）">
+        <input id="edTea" placeholder="教师（必填）">
+      </div>
+      <div class="actions">
+        <button class="act" id="edSave">保存修改</button>
+        <button class="act ghost" id="edCancel">收起</button>
+      </div>
+    </div>
+    <div class="range">
+      <label>应用范围：</label>
+      <select id="rangeMode">
+        <option value="week">仅本周（当前查看周）</option>
+        <option value="multi">选择多周（连续或任意）</option>
+      </select>
+      <span class="meta" style="color:var(--muted);font-size:12px">改动将批量应用到所选周次，每处仍独立校验无冲突</span>
+      <div id="weekChecks"></div>
+    </div>
+    <div class="rule">说明：① 互换＝两节对调，可跨电脑室；② 调位＝移过去、原格变空；③ 编辑＝原地改教师/班级，不动位置；④ 提交前服务端校验，<b>一个电脑室同一时段永远只有一个班</b>；⑤ 还会校验<b>同一位老师同一时段不能同时被排到两个电脑室</b>（如确需允许，请告知取消此校验）。</div>
+  </div>
+
+  <div class="panel log">
+    <h3 style="display:flex;align-items:center;justify-content:space-between">调课记录（可追溯）<button class="act ghost" id="exportLog" style="padding:6px 12px;font-size:13px">⬇️ 导出Excel</button></h3>
+    <table id="logTable">
+      <thead><tr><th style="width:150px">时间</th><th style="width:70px">操作人</th><th>变动内容</th><th style="width:90px">范围</th><th style="width:70px">类型</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <footer>信息科组内部调课工具 · 数据存于云端，多人实时同步</footer>
+</div>
+
+<!-- 导入弹窗 -->
+<div class="mask" id="importMask">
+  <div class="modal">
+    <h3>导入基础课表（重置全部 20 周）</h3>
+    <p><b>导入会用此模板覆盖全部 20 周，请确认无误。</b>每学年换一份文件即可复用：支持 Excel(.xlsx/.xls) 或 CSV，每个电脑室一个文件；也可手动粘贴。</p>
+    <div id="wxTip" style="display:none;background:#fff7e6;border:1px solid #ffd591;color:#874d00;padding:8px 10px;border-radius:8px;font-size:13px;margin:8px 0 12px">📱 微信内提示：导出 Excel 会进入「预览/转发」，可点右上角「···」→「用其他应用打开」保存到本地；如需从电脑选择表格文件导入，请点右上角「···」→「在浏览器打开」本链接后再操作。</div>
+    <div class="labtitle">① 上传文件（推荐）</div>
+    <div class="imp-row"><label>电脑室1 文件</label><input type="file" id="file1" accept=".xlsx,.xls,.csv"></div>
+    <div class="imp-row"><label>电脑室2 文件</label><input type="file" id="file2" accept=".xlsx,.xls,.csv"></div>
+    <button class="act" id="doImportFile">上传并导入文件</button>
+    <hr>
+    <div class="labtitle">② 或手动粘贴（每行＝一节次，每格「班级/教师」，无课填「空」）</div>
+    <div class="labtitle">电脑室1</div>
+    <textarea id="imp1" placeholder="周一,周二,周三,周四,周五&#10;空,五年级(10)/邝晓璇,四年级(12)/邝晓璇,..."></textarea>
+    <div class="labtitle">电脑室2</div>
+    <textarea id="imp2" placeholder="周一,周二,周三,周四,周五&#10;空,四年级(15)/郑嘉乐,六年级(6)/张琳,..."></textarea>
+    <hr>
+    <div class="labtitle">③ 学期设置（决定「自动算第几周」）</div>
+    <div class="imp-row"><label>第1周起始日</label><input type="date" id="termStart" value="2026-08-31" style="padding:6px 8px;font-size:14px"></div>
+    <div class="imp-row"><label>学期名称</label><input id="termName" placeholder="如 2026学年第一学期" style="padding:6px 8px;font-size:14px"></div>
+    <p class="meta" style="color:var(--muted);font-size:12px;margin:4px 0 0">系统按「今天 − 第1周周一」自动推算当前周并显示日期范围；每学年改这里即可。</p>
+    <div class="actions" style="margin-top:12px">
+      <button class="act" id="doImport">确认导入并重置</button>
+      <button class="act ghost" id="closeImport">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+let CUR={week:1,a:null,b:null,schedule:null,days:[],periods:[],labs:[]};
+
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+function labName(id){const l=CUR.labs.find(x=>x.id===id);return l?l.name:('电脑室'+id);}
+
+async function loadWeek(w){
+  CUR.week=Math.min(CUR.weeks||20,Math.max(1,w||1));
+  const r=await fetch('/api/state?week='+CUR.week);
+  const d=await r.json();
+  CUR.schedule=d.schedule;CUR.days=d.days;CUR.periods=d.periods;CUR.labs=d.labs;CUR.weeks=d.weeks;CUR.log=d.log;CUR.term=d.term;
+  CUR.currentWeek=d.currentWeek||1;CUR.weekRange=d.weekRange||null;CUR.termStart=d.termStart;
+  render();
+}
+
+function render(){
+  $('#subline').textContent='不同设备、不同老师浏览器打开同一链接 → 同一份实时课表；含 '+(CUR.weeks||20)+' 周，改动可应用到单周或多周。';
+  const tb=$('#termBadge');
+  if(CUR.term){tb.textContent='📘 '+CUR.term;tb.classList.remove('empty');}
+  else{tb.textContent='📘 未设置学期';tb.classList.add('empty');}
+  $('#wkLabel').textContent='第 '+CUR.week+' 周 / 共 '+(CUR.weeks||20)+' 周'+(CUR.week===CUR.currentWeek?'　📍本周':'');
+  $('#wkRange').textContent=CUR.weekRange?('（'+CUR.weekRange.mon+' ~ '+CUR.weekRange.sun+'）'):'';
+  // jump select
+  if($('#wkJump').options.length!==(CUR.weeks||20)){
+    $('#wkJump').innerHTML='';
+    for(let i=1;i<=CUR.weeks;i++){const o=document.createElement('option');o.textContent='第 '+i+' 周';o.value=i;$('#wkJump').appendChild(o);}
+  }
+  $('#wkJump').value=CUR.week;
+  // grids
+  const g=$('#grids');g.innerHTML='';
+  CUR.labs.forEach(lab=>{
+    const card=document.createElement('div');
+    card.className='lab-card lab'+(lab.id===1?'1':'2');
+    let head='<div class="lab-head"><span>💻 '+lab.name+'</span><span class="tag" style="background:#fff;border:1px solid var(--line);color:var(--muted)">'+(lab.id===1?'蓝':'绿')+'</span></div>';
+    let t='<div class="tbl-scroll"><table><thead><tr><th class="rowhead">节次＼星期</th>';
+    CUR.days.forEach(d=>t+='<th>'+d+'</th>');t+='</tr></thead><tbody>';
+    CUR.periods.forEach(p=>{
+      t+='<tr><td class="rowhead">'+p+'</td>';
+      CUR.days.forEach(d=>{
+        const c=CUR.schedule[lab.id][d][p];
+        const cls=c?'cell filled':'cell empty';
+        const cnt=c?('<span class="cls">'+c.cls+'</span><span class="tea">'+c.tea+'</span>'):'空';
+        t+='<td class="'+cls+'" data-lab="'+lab.id+'" data-day="'+d+'" data-period="'+p+'">'+cnt+'</td>';
+      });
+      t+='</tr>';
+    });
+    t+='</tbody></table></div>';
+    card.innerHTML=head+t;g.appendChild(card);
+  });
+  bindCells();
+  // 恢复选中高亮（仅高亮属于当前显示周的选格，跨周的选格不在本页不标，避免误标）
+  if(CUR.a&&CUR.a.week===CUR.week){const e=cellEl(CUR.a.lab,CUR.a.day,CUR.a.period);if(e)e.classList.add('selA');}
+  if(CUR.b&&CUR.b.week===CUR.week){const e=cellEl(CUR.b.lab,CUR.b.day,CUR.b.period);if(e)e.classList.add('selB');}
+  renderOp();
+  renderLog();
+}
+
+function bindCells(){
+  document.querySelectorAll('.cell').forEach(c=>{
+    c.addEventListener('click',()=>onCellClick(+c.dataset.lab,c.dataset.day,c.dataset.period,c));
+  });
+}
+function cellEl(lab,day,period){return document.querySelector('.cell[data-lab="'+lab+'"][data-day="'+day+'"][data-period="'+period+'"]');}
+function clearSel(){document.querySelectorAll('.cell.selA,.cell.selB').forEach(x=>x.classList.remove('selA','selB'));}
+
+function onCellClick(lab,day,period,el){
+  const addr={lab,day,period,week:CUR.week};
+  if(!CUR.a){CUR.a=addr;CUR.b=null;clearSel();el.classList.add('selA');renderOp();return;}
+  if(CUR.a&&!CUR.b){
+    if(CUR.a.lab===lab&&CUR.a.day===day&&CUR.a.period===period&&CUR.a.week===CUR.week){CUR.a=null;clearSel();renderOp();return;}
+    CUR.b=addr;clearSel();cellEl(CUR.a.lab,CUR.a.day,CUR.a.period).classList.add('selA');el.classList.add('selB');renderOp();return;
+  }
+  // start new selection
+  CUR.a=addr;CUR.b=null;clearSel();el.classList.add('selA');renderOp();
+}
+
+function opType(){
+  if(!CUR.a||!CUR.b)return null;
+  const B=CUR.schedule[CUR.b.lab][CUR.b.day][CUR.b.period];
+  return B?'swap':'move';
+}
+function getWeeks(){
+  if(CUR.a&&CUR.b&&CUR.a.week!==CUR.b.week)return [CUR.a.week,CUR.b.week]; // 跨周：仅两格所在周
+  if($('#rangeMode').value==='week')return [CUR.week];
+  const chk=[...document.querySelectorAll('#weekChecks input:checked')].map(i=>+i.value);
+  return chk.length?chk:[CUR.week];
+}
+function renderOp(){
+  const box=$('#opActions');box.innerHTML='';
+  if(!CUR.a){
+    box.innerHTML='<span class="hint" id="opHint">点选要操作的格子：先点 A，再点 B（B 有课＝互换，B 空＝调位）；或点 A 后“编辑本格”改教师。<br><b>支持跨周：选好 A 后切换周次再点 B，即可跨周调课。</b></span>';
+    $('#editbox').classList.remove('show');
+    $('#weekChecks').style.display=($('#rangeMode').value==='multi'?'flex':'none');
+    return;
+  }
+  const A=CUR.schedule[CUR.a.lab][CUR.a.day][CUR.a.period];
+  const aTxt=labName(CUR.a.lab)+' '+CUR.a.day+CUR.a.period+(A?(' '+A.cls+'('+A.tea+')'):' 空');
+  const aFull='第'+CUR.a.week+'周 '+aTxt;
+  if(!CUR.b){
+    $('#editbox').classList.remove('show');
+    box.innerHTML='<span class="hint">已选 A：<b>'+aFull+'</b></span>'+
+      '<button class="act" id="btnEdit">✏️ 编辑本格（改教师/班级）</button>'+
+      '<button class="act ghost" id="btnClear">取消选择</button>';
+    $('#btnEdit').onclick=openEdit;$('#btnClear').onclick=()=>{CUR.a=null;CUR.b=null;clearSel();renderOp();};
+    return;
+  }
+  const t=opType();
+  const B=CUR.schedule[CUR.b.lab][CUR.b.day][CUR.b.period];
+  const bTxt=labName(CUR.b.lab)+' '+CUR.b.day+CUR.b.period+(B?(' '+B.cls+'('+B.tea+')'):' 空');
+  const bFull='第'+CUR.b.week+'周 '+bTxt;
+  const verb=t==='swap'?'互换':'调位';
+  const cross=CUR.a.week!==CUR.b.week;
+  if(cross){
+    $('#weekChecks').style.display='none';
+    box.innerHTML='<span class="hint cross">📅 <b>跨周操作</b>：将 <b>'+aFull+'</b> 与 <b>'+bFull+'</b> 进行 <b>'+verb+'</b>。<br>⚠️ 跨周调课仅作用于上述两个周次，「应用范围/多周」不生效。</span>'+
+      '<button class="act" id="btnGo">✅ 确认执行（跨周）</button>'+
+      '<button class="act ghost" id="btnResel">重选</button>';
+  }else{
+    $('#weekChecks').style.display=($('#rangeMode').value==='multi'?'flex':'none');
+    box.innerHTML='<span class="hint">将 <b>'+aTxt+'</b> 与 <b>'+bTxt+'</b> 进行 <b>'+verb+'</b>（应用范围见下方）</span>'+
+      '<button class="act" id="btnGo">✅ 确认执行</button>'+
+      '<button class="act ghost" id="btnResel">重选</button>';
+  }
+  $('#btnGo').onclick=doOp;$('#btnResel').onclick=()=>{CUR.b=null;clearSel();if(CUR.a.week===CUR.week){const e=cellEl(CUR.a.lab,CUR.a.day,CUR.a.period);if(e)e.classList.add('selA');}renderOp();};
+}
+
+function openEdit(){
+  if(!CUR.a)return;
+  const A=CUR.schedule[CUR.a.lab][CUR.a.day][CUR.a.period];
+  $('#edCls').value=A?A.cls:'';
+  $('#edTea').value=A?A.tea:'';
+  $('#editbox').classList.add('show');
+}
+$('#edCancel').onclick=()=>$('#editbox').classList.remove('show');
+$('#edSave').onclick=async()=>{
+  const tea=$('#edTea').value.trim();
+  if(!tea){toast('教师不能为空');return;}
+  const who=$('#who').value.trim();
+  if(!who){toast('请先输入操作人姓名');return;}
+  const op={who,type:'edit',weeks:getWeeks(),a:CUR.a,cls:$('#edCls').value.trim(),tea};
+  await postOp(op);
+};
+
+async function doOp(){
+  const who=$('#who').value.trim();
+  if(!who){toast('请先输入操作人姓名');return;}
+  const t=opType();
+  const op={who,type:t,weeks:getWeeks(),a:CUR.a,b:CUR.b};
+  await postOp(op);
+}
+async function postOp(op){
+  const r=await fetch('/api/op',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(op)});
+  const d=await r.json();
+  if(!r.ok){toast('⚠️ '+d.error);return;}
+  const cross=op.type!=='edit'&&op.a&&op.b&&op.a.week!==op.b.week;
+  toast('✅ 已执行'+(cross?('（跨周：第'+op.a.week+'周 ↔ 第'+op.b.week+'周）'):('（'+rangeLabel(op.weeks)+'）')));
+  CUR.a=null;CUR.b=null;clearSel();$('#editbox').classList.remove('show');
+  await loadWeek(CUR.week);
+}
+function rangeLabel(weeks){
+  if(weeks.length===1)return '第'+weeks[0]+'周';
+  const s=[...weeks].sort((a,b)=>a-b);const min=s[0],max=s[s.length-1];
+  const consec=s.every((v,i)=>v===min+i);
+  return consec?('第'+min+'~'+max+'周'):('第'+s.join('、')+'周');
+}
+
+function renderLog(){
+  const tb=$('#logTable').querySelector('tbody');tb.innerHTML='';
+  (CUR.log||[]).forEach(e=>{
+    const tr=document.createElement('tr');
+    const time=(e.ts||'').replace('T',' ').slice(0,16);
+    const tagCls={swap:'ok',move:'move',edit:'edit',import:'import'}[e.type]||'ok';
+    const tagTxt={swap:'互换',move:'调位',edit:'改教师',import:'导入'}[e.type]||e.type;
+    tr.innerHTML='<td>'+time+'</td><td>'+e.who+'</td><td>'+e.detail+'</td><td>'+(e.range||'')+'</td><td><span class="tag '+tagCls+'">'+tagTxt+'</span></td>';
+    tb.appendChild(tr);
+  });
+}
+
+// 周次导航
+$('#prev').onclick=()=>loadWeek(CUR.week-1);
+$('#next').onclick=()=>loadWeek(CUR.week+1);
+$('#wkJump').onchange=e=>loadWeek(+e.target.value);
+$('#thisWeek').onclick=()=>loadWeek(CUR.currentWeek||1);
+
+// 应用范围 - 多选周
+function buildWeekChecks(){
+  const c=$('#weekChecks');c.innerHTML='';
+  for(let i=1;i<=20;i++){const l=document.createElement('label');l.innerHTML='<input type="checkbox" value="'+i+'"> 第'+i+'周';c.appendChild(l);}
+}
+buildWeekChecks();
+$('#rangeMode').onchange=e=>{$('#weekChecks').style.display=e.target.value==='multi'?'flex':'none';};
+
+// 导入
+$('#openImport').onclick=()=>{
+  $('#termStart').value=CUR.termStart||'2026-08-31';
+  $('#termName').value=CUR.term||'';
+  $('#importMask').classList.add('show');
+};
+$('#closeImport').onclick=()=>$('#importMask').classList.remove('show');
+function parseLab(text){
+  const grid={};CUR.days.forEach(d=>grid[d]={});
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length);
+  let start=0;if(lines[0]&&lines[0].includes('周一'))start=1;
+  for(let i=0;i<CUR.periods.length;i++){
+    const line=lines[start+i];if(!line)continue;
+    const cells=line.split(/[,，\t]/).map(s=>s.trim());
+    for(let j=0;j<CUR.days.length;j++){
+      const raw=cells[j]||'';
+      if(raw===''||raw==='空'||raw==='-'){grid[CUR.days[j]][CUR.periods[i]]=null;}
+      else{const p=raw.split(/[／/]/);grid[CUR.days[j]][CUR.periods[i]]={cls:p[0].trim(),tea:(p[1]||'').trim()};}
+    }
+  }
+  return grid;
+}
+$('#doImport').onclick=async()=>{
+  if(!CUR.days.length){toast('数据未就绪');return;}
+  const base={1:parseLab($('#imp1').value),2:parseLab($('#imp2').value)};
+  const who=$('#who').value.trim()||'管理员';
+  const termStart=$('#termStart').value.trim();
+  const term=$('#termName').value.trim();
+  const r=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({base,who,termStart,term})});
+  const d=await r.json();
+  if(!r.ok){toast('⚠️ '+d.error);return;}
+  toast('✅ 已导入并重置全部20周');
+  $('#importMask').classList.remove('show');
+  await loadWeek(1);
+};
+function readFileB64(file){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{const s=fr.result;const i=s.indexOf(',');res({name:file.name,data:i>=0?s.slice(i+1):s});};
+    fr.onerror=rej;fr.readAsDataURL(file);
+  });
+}
+$('#doImportFile').onclick=async()=>{
+  const f1=$('#file1').files[0], f2=$('#file2').files[0];
+  if(!f1||!f2){toast('请选择电脑室1和电脑室2两个文件');return;}
+  const who=$('#who').value.trim()||'管理员';
+  const files=[{lab:1,...(await readFileB64(f1))},{lab:2,...(await readFileB64(f2))}];
+  const termStart=$('#termStart').value.trim();
+  const term=$('#termName').value.trim();
+  const r=await fetch('/api/import-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({files,who,termStart,term})});
+  const d=await r.json();
+  if(!r.ok){toast('⚠️ '+d.error);return;}
+  toast('✅ 已导入：室1 '+d.cells1+'格、室2 '+d.cells2+'格，已重置全部20周');
+  $('#importMask').classList.remove('show');
+  await loadWeek(1);
+};
+$('#exportLog').onclick=()=>{ window.location.href='/api/export-log'; };
+
+// 记住姓名
+const saved=localStorage.getItem('labSwapWho');if(saved)$('#who').value=saved;
+$('#saveName').onclick=()=>{localStorage.setItem('labSwapWho',$('#who').value.trim());toast('已记住姓名');};
+
+// 微信内打开时给出操作提示
+if(/MicroMessenger/i.test(navigator.userAgent||'')){
+  const t=document.getElementById('wxTip'); if(t) t.style.display='block';
+}
+
+// 首次加载：先取一次状态拿到自动推算的当前周，再打开该周（仍可手动翻到其他周）
+(async()=>{
+  try{
+    const d=await (await fetch('/api/state?week=1')).json();
+    await loadWeek(d.currentWeek||1);
+  }catch(e){ await loadWeek(1); }
+})();
+</script>
+</body>
+</html>
