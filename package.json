@@ -1,0 +1,11 @@
+{
+  "name": "lab-swap-app",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
