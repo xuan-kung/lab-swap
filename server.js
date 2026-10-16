@@ -52,6 +52,7 @@ const GH_BRANCH = process.env.GITHUB_DATA_BRANCH || 'main';
 const GH_FILE = '/repos/' + GH_REPO + '/contents/' + GH_PATH;
 const remoteEnabled = !!(GH_TOKEN && GH_REPO);
 let remoteSha = null;
+let lastRemoteError = '';   // 最近一次远端操作错误（供 /api/debug-remote 诊断）
 
 function ghApi(method, urlPath, payload, extraHeaders) {
   return new Promise((resolve, reject) => {
@@ -202,6 +203,7 @@ async function initDb() {
       console.log('[data] 远端仓库无数据，已初始化 ' + GH_REPO + '/' + GH_PATH);
       return;
     } catch (e) {
+      lastRemoteError = e.message;
       console.error('[data] 远端不可用，本次先用本地数据：' + e.message);
     }
   }
@@ -248,7 +250,7 @@ function scheduleRemoteSave() {
   if (remoteTimer) clearTimeout(remoteTimer);
   remoteTimer = setTimeout(() => {
     remoteTimer = null;
-    remoteChain = remoteChain.then(() => remoteSave(db)).catch(e => console.error('[data] 远端同步失败：' + e.message));
+    remoteChain = remoteChain.then(() => remoteSave(db)).catch(e => { lastRemoteError = e.message; console.error('[data] 远端同步失败：' + e.message); });
   }, 800);
 }
 // 立即把最新数据推到远端（进程退出/休眠前调用，抢救最后几秒的改动）
@@ -463,6 +465,25 @@ function handleRequest(req, res) {
       week, schedule: db.schedule[week], weekRange: weekRange(week),
       log: db.log.slice(-80).reverse()
     });
+  }
+
+  // 诊断：检查容器内 GITHUB_TOKEN 真实状态 + 主动探测一次远端读取
+  if (u.pathname === '/api/debug-remote') {
+    remoteLoad().then(r => {
+      const probe = r ? ('远端已有数据(' + ((r.log || []).length) + '条记录)') : '远端为空(404)';
+      sendJson(res, 200, {
+        remoteEnabled, repo: GH_REPO, branch: GH_BRANCH, path: GH_PATH,
+        tokenLen: GH_TOKEN.length, tokenPreview: GH_TOKEN.slice(0, 8) + '…',
+        lastRemoteError: lastRemoteError || '(无)', probe
+      });
+    }).catch(e => {
+      sendJson(res, 200, {
+        remoteEnabled, repo: GH_REPO, branch: GH_BRANCH, path: GH_PATH,
+        tokenLen: GH_TOKEN.length, tokenPreview: GH_TOKEN.slice(0, 8) + '…',
+        lastRemoteError: lastRemoteError || '(无)', probe: '探测失败: ' + e.message
+      });
+    });
+    return;
   }
 
   if (req.method === 'POST' && u.pathname === '/api/op') {
