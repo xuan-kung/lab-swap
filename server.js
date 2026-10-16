@@ -3,6 +3,7 @@
 // 持久化：data.json（串行写，避免并发损坏）。
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
@@ -10,8 +11,105 @@ const XLSX = require('xlsx');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
-const DATA_FILE = path.join(ROOT, 'data.json');
 const PORT = process.env.PORT || 3000;
+
+// 数据文件位置探测：云容器里应用目录常为只读（EACCES），按
+// 环境变量 DATA_DIR → 应用目录 → 系统临时目录 依次找第一个可写位置。
+function pickDataFile() {
+  const os = require('os');
+  const cands = [];
+  if (process.env.DATA_DIR) cands.push(path.join(process.env.DATA_DIR, 'data.json'));
+  cands.push(path.join(ROOT, 'data.json'));
+  cands.push(path.join(os.tmpdir(), 'lab-swap-data.json'));
+  for (const p of cands) {
+    try {
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      const probe = p + '.probe';
+      fs.writeFileSync(probe, 'ok');
+      fs.unlinkSync(probe);
+      return p;
+    } catch (e) {
+      console.warn('[data] 不可写，跳过 ' + p + ' (' + (e && e.code) + ')');
+    }
+  }
+  return path.join(os.tmpdir(), 'lab-swap-data.json');
+}
+const DATA_FILE = pickDataFile();
+console.log('[data] 使用数据文件：' + DATA_FILE);
+
+/* ==========================================================================
+   远端持久化（可选，强烈建议在免费云容器里启用）
+   免费容器（SnapDeploy 等）的磁盘是临时的：休眠/重启/重新部署后会重置，
+   本地 data.json 会丢。故把同一份数据同时存到容器外的 GitHub 私有仓库，
+   启动时优先从远端载入，之后每次改动异步回写。
+   启用方式：配置环境变量 GITHUB_TOKEN + GITHUB_DATA_REPO（不配则退回纯本地文件）。
+   ========================================================================== */
+const GH_TOKEN = process.env.GITHUB_TOKEN || '';
+const GH_REPO = process.env.GITHUB_DATA_REPO || '';
+const GH_PATH = process.env.GITHUB_DATA_PATH || 'data.json';
+const GH_BRANCH = process.env.GITHUB_DATA_BRANCH || 'main';
+const GH_FILE = '/repos/' + GH_REPO + '/contents/' + GH_PATH;
+const remoteEnabled = !!(GH_TOKEN && GH_REPO);
+let remoteSha = null;
+
+function ghApi(method, urlPath, payload, extraHeaders) {
+  return new Promise((resolve, reject) => {
+    const body = payload ? Buffer.from(JSON.stringify(payload), 'utf8') : null;
+    const headers = Object.assign({
+      'User-Agent': 'lab-swap-app',
+      'Accept': 'application/vnd.github+json',
+      'Authorization': 'Bearer ' + GH_TOKEN
+    }, extraHeaders || {});
+    if (body) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = body.length; }
+    const req = https.request({ hostname: 'api.github.com', path: urlPath, method, headers }, r => {
+      let b = '';
+      r.on('data', d => b += d);
+      r.on('end', () => {
+        let j = null; try { j = JSON.parse(b); } catch (e) {}
+        resolve({ status: r.statusCode, json: j, text: b });
+      });
+    });
+    req.setTimeout(15000, () => req.destroy(new Error('远端请求超时')));
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function remoteLoad() {
+  const r = await ghApi('GET', GH_FILE + '?ref=' + encodeURIComponent(GH_BRANCH));
+  if (r.status === 404) return null;
+  if (r.status !== 200) throw new Error('读取远端数据失败 HTTP ' + r.status);
+  remoteSha = r.json && r.json.sha ? r.json.sha : null;
+  let txt = r.json && r.json.content ? Buffer.from(r.json.content, 'base64').toString('utf8') : null;
+  if (!txt) {  // 文件大于 1MB 时 contents API 不返回 content，改用 raw
+    const raw = await ghApi('GET', GH_FILE + '?ref=' + encodeURIComponent(GH_BRANCH), null, { 'Accept': 'application/vnd.github.raw' });
+    if (raw.status !== 200) throw new Error('读取远端原始数据失败 HTTP ' + raw.status);
+    txt = raw.text;
+  }
+  return JSON.parse(txt);
+}
+
+async function remoteSave(data) {
+  const payload = {
+    message: 'update data ' + new Date().toISOString(),
+    content: Buffer.from(JSON.stringify(data), 'utf8').toString('base64'),
+    branch: GH_BRANCH
+  };
+  if (remoteSha) payload.sha = remoteSha;
+  let r = await ghApi('PUT', GH_FILE, payload);
+  if (r.status === 409 || r.status === 422) {   // sha 过期：重取后再写一次
+    const cur = await ghApi('GET', GH_FILE + '?ref=' + encodeURIComponent(GH_BRANCH));
+    if (cur.status === 200 && cur.json && cur.json.sha) {
+      payload.sha = cur.json.sha; remoteSha = cur.json.sha;
+      r = await ghApi('PUT', GH_FILE, payload);
+    }
+  }
+  if (r.status !== 200 && r.status !== 201) {
+    throw new Error('写入远端数据失败 HTTP ' + r.status + ' ' + String(r.text || '').slice(0, 160));
+  }
+  if (r.json && r.json.content && r.json.content.sha) remoteSha = r.json.content.sha;
+}
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五'];
 const PERIODS = ['上午1', '上午2', '上午3', '上午4', '下午1', '下午2'];
@@ -62,23 +160,53 @@ function buildScheduleFromBase(base) {
 }
 
 let db;
-function loadDb() {
+
+function buildFreshDb() {
+  return {
+    term: TERM,
+    termStart: TERM_START_DEFAULT,
+    labs: LABS, days: DAYS, periods: PERIODS, weeks: WEEKS,
+    base: BASE_SCHEDULE,
+    schedule: buildScheduleFromBase(BASE_SCHEDULE),
+    log: []
+  };
+}
+// 结构校验：不合格（损坏/旧版格式）返回 null，由调用方决定回落
+function normalizeDb(d) {
+  if (!d || !d.schedule || !d.schedule[1] || !d.periods || d.periods[0] !== PERIODS[0]) return null;
+  if (!d.termStart) d.termStart = TERM_START_DEFAULT;
+  return d;
+}
+function loadLocal() {
   if (fs.existsSync(DATA_FILE)) {
-    try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); }
-    catch (e) { console.error('数据文件损坏，重建', e); }
+    try { return normalizeDb(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }
+    catch (e) { console.error('[data] 本地数据文件损坏，忽略', e.message); }
   }
-  if (!db || !db.schedule || !db.schedule[1] || !db.periods || db.periods[0] !== PERIODS[0]) {
-    db = {
-      term: TERM,
-      termStart: TERM_START_DEFAULT,
-      labs: LABS, days: DAYS, periods: PERIODS, weeks: WEEKS,
-      base: BASE_SCHEDULE,
-      schedule: buildScheduleFromBase(BASE_SCHEDULE),
-      log: []
-    };
-    saveDbSync();
+  return null;
+}
+// 启动顺序：远端数据 > 本地文件 > 全新基础课表
+async function initDb() {
+  const local = loadLocal();
+  if (remoteEnabled) {
+    try {
+      const remote = normalizeDb(await remoteLoad());
+      if (remote) {
+        db = remote;
+        saveLocal();
+        console.log('[data] 已从远端仓库载入 ' + GH_REPO + '/' + GH_PATH + '（调课记录：' + (db.log || []).length + ' 条）');
+        return;
+      }
+      db = local || buildFreshDb();
+      await remoteSave(db);
+      console.log('[data] 远端仓库无数据，已初始化 ' + GH_REPO + '/' + GH_PATH);
+      return;
+    } catch (e) {
+      console.error('[data] 远端不可用，本次先用本地数据：' + e.message);
+    }
   }
-  if (!db.termStart) db.termStart = TERM_START_DEFAULT;
+  db = local || buildFreshDb();
+  saveLocal();
+  console.log('[data] 数据就绪（本地）：调课记录 ' + (db.log || []).length + ' 条');
 }
 
 function parseDate(s) {
@@ -106,14 +234,38 @@ function weekRange(week) {
   return { mon: fmt(mon), sun: fmt(sun) };
 }
 
-let writeChain = Promise.resolve();
-function saveDb() {
-  writeChain = writeChain.then(() => new Promise((res, rej) => {
-    fs.writeFile(DATA_FILE, JSON.stringify(db), (err) => err ? rej(err) : res());
-  }));
-  return writeChain;
+function saveLocal() {
+  try { fs.writeFileSync(DATA_FILE, JSON.stringify(db)); }
+  catch (e) { console.error('[data] 本地写入失败（忽略）：' + e.message); }
 }
-function saveDbSync() { fs.writeFileSync(DATA_FILE, JSON.stringify(db)); }
+
+// 远端回写：防抖 800ms 合并连续改动，串行执行避免并发冲突
+let remoteTimer = null;
+let remoteChain = Promise.resolve();
+function scheduleRemoteSave() {
+  if (!remoteEnabled) return;
+  if (remoteTimer) clearTimeout(remoteTimer);
+  remoteTimer = setTimeout(() => {
+    remoteTimer = null;
+    remoteChain = remoteChain.then(() => remoteSave(db)).catch(e => console.error('[data] 远端同步失败：' + e.message));
+  }, 800);
+}
+// 立即把最新数据推到远端（进程退出/休眠前调用，抢救最后几秒的改动）
+function flushRemote() {
+  if (!remoteEnabled) return Promise.resolve();
+  if (remoteTimer) { clearTimeout(remoteTimer); remoteTimer = null; }
+  remoteChain = remoteChain.then(() => remoteSave(db)).catch(e => console.error('[data] 远端同步失败：' + e.message));
+  return remoteChain;
+}
+
+// 保存：本地即时落盘 + 远端异步回写（页面不必等网络）
+function saveDb() {
+  return new Promise((resolve, reject) => {
+    try { saveLocal(); } catch (e) { return reject(e); }
+    scheduleRemoteSave();
+    resolve();
+  });
+}
 
 function labName(id) { const l = LABS.find(x => x.id === id); return l ? l.name : ('电脑室' + id); }
 
@@ -291,7 +443,7 @@ function readBody(req, cb) {
   });
 }
 
-const server = http.createServer((req, res) => {
+function handleRequest(req, res) {
   const u = new URL(req.url, 'http://localhost');
 
   if (req.method === 'GET' && (u.pathname === '/' || u.pathname === '/index.html')) {
@@ -444,7 +596,21 @@ const server = http.createServer((req, res) => {
   }
 
   res.writeHead(404); res.end('not found');
-});
+}
 
-loadDb();
+// 启动：先初始化数据（可能要从远端仓库拉取），就绪前的请求排队等待
+const ready = initDb();
+const server = http.createServer((req, res) => {
+  ready.then(() => handleRequest(req, res)).catch(err => {
+    console.error('[init] 初始化失败', err);
+    try {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('服务初始化失败：' + err.message);
+    } catch (e) {}
+  });
+});
+// 容器休眠/停机前，把最后几秒的改动推到远端
+['SIGTERM', 'SIGINT'].forEach(sig => process.on(sig, () => {
+  flushRemote().then(() => process.exit(0), () => process.exit(0));
+}));
 server.listen(PORT, '0.0.0.0', () => console.log('电脑室调课系统已启动: http://0.0.0.0:' + PORT));
