@@ -458,6 +458,7 @@ function handleRequest(req, res) {
       term: db.term || TERM,
       termStart: db.termStart,
       currentWeek: cw,
+      remoteEnabled: remoteEnabled,
       labs: db.labs, days: db.days, periods: db.periods, weeks: db.weeks,
       week, schedule: db.schedule[week], weekRange: weekRange(week),
       log: db.log.slice(-80).reverse()
