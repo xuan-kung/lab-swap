@@ -114,6 +114,8 @@
   </header>
   <div class="sub" id="subline">不同设备、不同老师浏览器打开同一链接 → 同一份实时课表；含 20 周，改动可应用到单周或多周。</div>
 
+  <div id="backupWarn" style="display:none;background:#fff2f0;border:1px solid #ffccc7;color:#cf1322;padding:8px 10px;border-radius:8px;font-size:13px;margin:8px 0 4px">⚠️ 当前未启用云端备份：免费容器空闲约 15 分钟后会休眠，调课记录可能丢失。请部署者在 SnapDeploy 给本容器添加环境变量 <b>GITHUB_TOKEN</b> 后重新部署，即可自动云端保存。</div>
+
   <div class="weekbar">
     <div class="nav">
       <button class="navbtn" id="prev">‹</button>
@@ -215,7 +217,7 @@ async function loadWeek(w){
   const r=await fetch('/api/state?week='+CUR.week);
   const d=await r.json();
   CUR.schedule=d.schedule;CUR.days=d.days;CUR.periods=d.periods;CUR.labs=d.labs;CUR.weeks=d.weeks;CUR.log=d.log;CUR.term=d.term;
-  CUR.currentWeek=d.currentWeek||1;CUR.weekRange=d.weekRange||null;CUR.termStart=d.termStart;
+  CUR.currentWeek=d.currentWeek||1;CUR.weekRange=d.weekRange||null;CUR.termStart=d.termStart;CUR.remoteEnabled=d.remoteEnabled;
   render();
 }
 
@@ -224,6 +226,7 @@ function render(){
   const tb=$('#termBadge');
   if(CUR.term){tb.textContent='📘 '+CUR.term;tb.classList.remove('empty');}
   else{tb.textContent='📘 未设置学期';tb.classList.add('empty');}
+  $('#backupWarn').style.display = (CUR.remoteEnabled===false) ? 'block' : 'none';
   $('#wkLabel').textContent='第 '+CUR.week+' 周 / 共 '+(CUR.weeks||20)+' 周'+(CUR.week===CUR.currentWeek?'　📍本周':'');
   $('#wkRange').textContent=CUR.weekRange?('（'+CUR.weekRange.mon+' ~ '+CUR.weekRange.sun+'）'):'';
   // jump select
