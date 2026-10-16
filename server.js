@@ -45,7 +45,8 @@ console.log('[data] 使用数据文件：' + DATA_FILE);
    启用方式：配置环境变量 GITHUB_TOKEN + GITHUB_DATA_REPO（不配则退回纯本地文件）。
    ========================================================================== */
 const GH_TOKEN = process.env.GITHUB_TOKEN || '';
-const GH_REPO = process.env.GITHUB_DATA_REPO || '';
+// 数据仓库默认指向私有仓库；如需换仓库，用 GITHUB_DATA_REPO 覆盖
+const GH_REPO = process.env.GITHUB_DATA_REPO || 'xuan-kung/lab-swap-data';
 const GH_PATH = process.env.GITHUB_DATA_PATH || 'data.json';
 const GH_BRANCH = process.env.GITHUB_DATA_BRANCH || 'main';
 const GH_FILE = '/repos/' + GH_REPO + '/contents/' + GH_PATH;
