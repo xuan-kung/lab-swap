@@ -467,25 +467,6 @@ function handleRequest(req, res) {
     });
   }
 
-  // 诊断：检查容器内 GITHUB_TOKEN 真实状态 + 主动探测一次远端读取
-  if (u.pathname === '/api/debug-remote') {
-    remoteLoad().then(r => {
-      const probe = r ? ('远端已有数据(' + ((r.log || []).length) + '条记录)') : '远端为空(404)';
-      sendJson(res, 200, {
-        remoteEnabled, repo: GH_REPO, branch: GH_BRANCH, path: GH_PATH,
-        tokenLen: GH_TOKEN.length, tokenPreview: GH_TOKEN.slice(0, 8) + '…',
-        lastRemoteError: lastRemoteError || '(无)', probe
-      });
-    }).catch(e => {
-      sendJson(res, 200, {
-        remoteEnabled, repo: GH_REPO, branch: GH_BRANCH, path: GH_PATH,
-        tokenLen: GH_TOKEN.length, tokenPreview: GH_TOKEN.slice(0, 8) + '…',
-        lastRemoteError: lastRemoteError || '(无)', probe: '探测失败: ' + e.message
-      });
-    });
-    return;
-  }
-
   if (req.method === 'POST' && u.pathname === '/api/op') {
     return readBody(req, (op) => {
       if (!op.who || !op.who.trim()) return sendJson(res, 400, { error: '请先输入操作人姓名' });
